@@ -367,7 +367,7 @@ jobs:
     steps:
     - name: Download artifact
       id: download
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: ${{ matrix.artifact }}
         path: upload
@@ -412,39 +412,48 @@ jobs:
 
       - name: Download Windows 64-bit installer
         id: download-win64-installer
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: Tiled-win64.msi
 
       - name: Download Windows 32-bit installer
         id: download-win32-installer
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: Tiled-win32.msi
 
       - name: Download Linux AppImage (Qt5)
         id: download-appimage-qt5
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: Tiled-Qt5-x86_64.AppImage
 
       - name: Download Linux AppImage (Qt6)
         id: download-appimage-qt6
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: Tiled-Qt6-x86_64.AppImage
 
       - name: Download macOS app (Qt5)
         id: download-app-qt5
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: Tiled-Qt5-macos.app
 
       - name: Download macOS app (Qt6)
         id: download-app-qt6
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: Tiled-Qt6-macos.app
+
+      - name: 'Echo download paths'
+        run: |
+          echo ${{steps.download-win64-installer.outputs.download-path}}
+          echo ${{steps.download-win32-installer.outputs.download-path}}
+          echo ${{steps.download-appimage-qt5.outputs.download-path}}
+          echo ${{steps.download-appimage-qt6.outputs.download-path}}
+          echo ${{steps.download-app-qt5.outputs.download-path}}
+          echo ${{steps.download-app-qt6.outputs.download-path}}
 
       - name: Upload Windows 64-bit installer
         uses: actions/upload-release-asset@v1
