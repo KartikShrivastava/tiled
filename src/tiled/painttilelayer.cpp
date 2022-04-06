@@ -29,19 +29,25 @@
 
 using namespace Tiled;
 
+PaintTileLayer::PaintTileLayer(MapDocument *mapDocument, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , mMapDocument(mapDocument)
+    , mMergeable(false)
+{
+    setText(QCoreApplication::translate("Undo Commands", "Paint"));
+}
+
 PaintTileLayer::PaintTileLayer(MapDocument *mapDocument,
                                TileLayer *target,
                                int x,
                                int y,
                                const TileLayer *source,
                                QUndoCommand *parent)
-    : PaintTileLayer(mapDocument,
-                     target,
-                     x, y,
-                     source,
-                     source->region().translated(QPoint(x, y) - source->position()),
-                     parent)
+    : PaintTileLayer(mapDocument, parent)
 {
+    paint(target, x, y,
+          std::unique_ptr<TileLayer>(source->clone()),
+          source->region().translated(QPoint(x, y) - source->position()));
 }
 
 PaintTileLayer::PaintTileLayer(MapDocument *mapDocument,
@@ -51,31 +57,66 @@ PaintTileLayer::PaintTileLayer(MapDocument *mapDocument,
                                const TileLayer *source,
                                const QRegion &paintRegion,
                                QUndoCommand *parent)
-    : QUndoCommand(parent)
-    , mMapDocument(mapDocument)
-    , mMergeable(false)
+    : PaintTileLayer(mapDocument, parent)
 {
-    auto &data = mLayerData[target];
+    paint(target, x, y,
+          std::unique_ptr<TileLayer>(source->clone()),
+          paintRegion);
+}
 
-    data.mSource.reset(source->clone());
-    data.mErased.reset(new TileLayer);
-    data.mErased->setCells(target->x(), target->y(), target, paintRegion);
-    data.mX = x;
-    data.mY = y;
-    data.mPaintedRegion = paintRegion;
-
-    setText(QCoreApplication::translate("Undo Commands", "Paint"));
+PaintTileLayer::PaintTileLayer(MapDocument *mapDocument,
+                               TileLayer *target,
+                               int x,
+                               int y,
+                               std::unique_ptr<TileLayer> source,
+                               const QRegion &paintRegion,
+                               QUndoCommand *parent)
+    : PaintTileLayer(mapDocument, parent)
+{
+    paint(target, x, y, std::move(source), paintRegion);
 }
 
 PaintTileLayer::~PaintTileLayer()
 {
 }
 
+void PaintTileLayer::paint(TileLayer *target,
+                           int x,
+                           int y,
+                           std::unique_ptr<TileLayer> source,
+                           const QRegion &paintRegion)
+{
+    auto &data = mLayerData[target];
+
+    // If we haven't touched this target layer before, move over the source
+    if (!data.mSource) {
+        data.mSource = std::move(source);
+        data.mErased = std::make_unique<TileLayer>();
+        data.mErased->setCells(target->x(), target->y(), target, paintRegion);
+        data.mX = x;
+        data.mY = y;
+        data.mPaintedRegion = paintRegion;
+        return;
+    }
+
+    const QRegion combinedRegion = data.mPaintedRegion.united(paintRegion);
+    const QRegion addedRegion = combinedRegion.subtracted(data.mPaintedRegion);
+
+    // Copy the additionally painted tiles
+    data.mPaintedRegion = combinedRegion;
+    data.mSource->setCells(x - data.mSource->x(),
+                           y - data.mSource->y(),
+                           source.get(),
+                           paintRegion.translated(-source->position()));
+
+    // Copy the additionally erased tiles
+    data.mErased->setCells(target->x(), target->y(), target, addedRegion);
+}
+
 void PaintTileLayer::undo()
 {
-    for (const std::pair<TileLayer* const, LayerData> &entry : mLayerData) {
-        const LayerData &data = entry.second;
-        TilePainter painter(mMapDocument, entry.first);
+    for (const auto& [tileLayer, data] : mLayerData) {
+        TilePainter painter(mMapDocument, tileLayer);
         painter.setCells(0, 0, data.mErased.get(), data.mPaintedRegion);
     }
 
@@ -86,9 +127,8 @@ void PaintTileLayer::redo()
 {
     QUndoCommand::redo(); // redo child commands
 
-    for (const std::pair<TileLayer* const, LayerData> &entry : mLayerData) {
-        const LayerData &data = entry.second;
-        TilePainter painter(mMapDocument, entry.first);
+    for (const auto& [tileLayer, data] : mLayerData) {
+        TilePainter painter(mMapDocument, tileLayer);
         painter.setCells(data.mX, data.mY, data.mSource.get(), data.mPaintedRegion);
     }
 }
@@ -129,8 +169,8 @@ bool PaintTileLayer::mergeWith(const QUndoCommand *other)
     if (!cloneChildren(other, this))
         return false;
 
-    for (const std::pair<TileLayer* const, LayerData> &entry : o->mLayerData)
-        mLayerData[entry.first].mergeWith(entry.second);
+    for (const auto& [tileLayer, data] : o->mLayerData)
+        mLayerData[tileLayer].mergeWith(data);
 
     return true;
 }

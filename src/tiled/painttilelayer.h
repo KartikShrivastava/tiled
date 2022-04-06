@@ -44,6 +44,14 @@ class PaintTileLayer : public QUndoCommand
 {
 public:
     /**
+     * Minimal constructor, to be used in combination with paint().
+     *
+     * @param mapDocument the map document that's being edited
+     */
+    PaintTileLayer(MapDocument *mapDocument,
+                   QUndoCommand *parent = nullptr);
+
+    /**
      * Constructor.
      *
      * @param mapDocument the map document that's being edited
@@ -75,12 +83,35 @@ public:
                    const QRegion &paintRegion,
                    QUndoCommand *parent = nullptr);
 
+    /**
+     * Constructor that takes an explicit paint region.
+     *
+     * @param mapDocument the map document that's being edited
+     * @param target      the target layer to paint on
+     * @param x           the x position of the paint location
+     * @param y           the y position of the paint location
+     * @param source      the source layer to paint on the target layer
+     * @param paintRegion the region to paint, in map coordinates
+     */
+    PaintTileLayer(MapDocument *mapDocument,
+                   TileLayer *target,
+                   int x, int y,
+                   std::unique_ptr<TileLayer> source,
+                   const QRegion &paintRegion,
+                   QUndoCommand *parent = nullptr);
+
     ~PaintTileLayer() override;
 
     /**
      * Sets whether this undo command can be merged with an existing command.
      */
     void setMergeable(bool mergeable);
+
+    void paint(TileLayer *target,
+               int x,
+               int y,
+               std::unique_ptr<TileLayer> source,
+               const QRegion &paintRegion);
 
     void undo() override;
     void redo() override;

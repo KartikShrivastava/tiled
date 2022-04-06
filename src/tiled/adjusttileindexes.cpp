@@ -81,9 +81,9 @@ AdjustTileIndexes::AdjustTileIndexes(MapDocument *mapDocument,
 
             if (!region.isEmpty()) {
                 const QRect boundingRect(region.boundingRect());
-                auto changedLayer = new TileLayer(QString(), 0, 0,
-                                                  boundingRect.width(),
-                                                  boundingRect.height());
+                auto changedLayer = std::make_unique<TileLayer>(QString(), 0, 0,
+                                                                boundingRect.width(),
+                                                                boundingRect.height());
 
                 for (const QRect &rect : region) {
                     for (int x = rect.left(); x <= rect.right(); ++x) {
@@ -99,10 +99,9 @@ AdjustTileIndexes::AdjustTileIndexes(MapDocument *mapDocument,
                 new PaintTileLayer(mapDocument, tileLayer,
                                    boundingRect.x() + tileLayer->x(),
                                    boundingRect.y() + tileLayer->y(),
-                                   changedLayer,
+                                   std::move(changedLayer),
+                                   region.translated(tileLayer->position()),
                                    this);
-
-                delete changedLayer;
             }
 
             break;
